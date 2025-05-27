@@ -1,0 +1,184 @@
+<!-- templates/calendar.html -->
+{% extends "base.html" %}
+
+{% block title %}Calendar View{% endblock %}
+
+{% block content %}
+<div class="filter-container">
+    <h5><i class="fas fa-filter"></i> Filters</h5>
+    <div class="row">
+        <div class="col-md-4">
+            <label for="teacherFilter" class="form-label">Teacher</label>
+            <select id="teacherFilter" class="form-select">
+                <option value="">All Teachers</option>
+                {% for teacher in teachers %}
+                    <option value="{{ teacher }}">{{ teacher }}</option>
+                {% endfor %}
+            </select>
+        </div>
+        <div class="col-md-4">
+            <label for="subjectFilter" class="form-label">Subject</label>
+            <select id="subjectFilter" class="form-select">
+                <option value="">All Subjects</option>
+                {% for subject in subjects %}
+                    <option value="{{ subject }}">{{ subject }}</option>
+                {% endfor %}
+            </select>
+        </div>
+        <div class="col-md-4">
+            <label for="classFilter" class="form-label">Class</label>
+            <select id="classFilter" class="form-select">
+                <option value="">All Classes</option>
+                {% for class in classes %}
+                    <option value="{{ class }}">{{ class }}</option>
+                {% endfor %}
+            </select>
+        </div>
+    </div>
+    <div class="row mt-3">
+        <div class="col-md-12">
+            <button id="applyFilters" class="btn btn-primary">
+                <i class="fas fa-search"></i> Apply Filters
+            </button>
+            <button id="clearFilters" class="btn btn-secondary ms-2">
+                <i class="fas fa-times"></i> Clear Filters
+            </button>
+            <button id="generateRRule" class="btn btn-info ms-2">
+                <i class="fas fa-code"></i> Generate RRULE
+            </button>
+        </div>
+    </div>
+</div>
+
+<div id="calendar"></div>
+
+<!-- RRULE Modal -->
+<div class="modal fade" id="rruleModal" tabindex="-1">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">Generated RRULE Strings</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <div id="rruleContent"></div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Event Detail Modal -->
+<div class="modal fade" id="eventModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">Event Details</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <div id="eventContent"></div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    var calendarEl = document.getElementById('calendar');
+    var calendar = new FullCalendar.Calendar(calendarEl, {
+        initialView: 'timeGridWeek',
+        headerToolbar: {
+            left: 'prev,next today',
+            center: 'title',
+            right: 'dayGridMonth,timeGridWeek,timeGridDay'
+        },
+        slotMinTime: '09:00:00',
+        slotMaxTime: '17:00:00',
+        height: 'auto',
+        events: function(fetchInfo, successCallback, failureCallback) {
+            loadEvents(fetchInfo, successCallback, failureCallback);
+        },
+        eventClick: function(info) {
+            showEventDetails(info.event);
+        }
+    });
+    
+    calendar.render();
+    
+    function loadEvents(fetchInfo, successCallback, failureCallback) {
+        var teacherFilter = document.getElementById('teacherFilter').value;
+        var subjectFilter = document.getElementById('subjectFilter').value;
+        var classFilter = document.getElementById('classFilter').value;
+        
+        var params = new URLSearchParams({
+            start: fetchInfo.startStr,
+            end: fetchInfo.endStr
+        });
+        
+        if (teacherFilter) params.append('teacher', teacherFilter);
+        if (subjectFilter) params.append('subject', subjectFilter);
+        if (classFilter) params.append('class', classFilter);
+        
+        fetch('/api/events?' + params.toString())
+            .then(response => response.json())
+            .then(data => successCallback(data))
+            .catch(error => failureCallback(error));
+    }
+    
+    function showEventDetails(event) {
+        var content = `
+            <div class="row">
+                <div class="col-12">
+                    <h6><strong>Teacher:</strong> ${event.extendedProps.teacher}</h6>
+                    <h6><strong>Subject:</strong> ${event.extendedProps.subject}</h6>
+                    <h6><strong>Class:</strong> ${event.extendedProps.class}</h6>
+                    <h6><strong>Period:</strong> ${event.extendedProps.period}</h6>
+                    <h6><strong>Time:</strong> ${event.extendedProps.timeSlot}</h6>
+                    <h6><strong>Day:</strong> ${event.start.toLocaleDateString('en-US', { weekday: 'long' })}</h6>
+                </div>
+            </div>
+        `;
+        document.getElementById('eventContent').innerHTML = content;
+        new bootstrap.Modal(document.getElementById('eventModal')).show();
+    }
+    
+    // Filter event handlers
+    document.getElementById('applyFilters').addEventListener('click', function() {
+        calendar.refetchEvents();
+    });
+    
+    document.getElementById('clearFilters').addEventListener('click', function() {
+        document.getElementById('teacherFilter').value = '';
+        document.getElementById('subjectFilter').value = '';
+        document.getElementById('classFilter').value = '';
+        calendar.refetchEvents();
+    });
+    
+    // Generate RRULE functionality
+    document.getElementById('generateRRule').addEventListener('click', function() {
+        fetch('/generate_rrule')
+            .then(response => response.json())
+            .then(data => {
+                var content = '<div class="table-responsive"><table class="table table-striped"><thead><tr><th>Teacher</th><th>Subject</th><th>Class</th><th>Day</th><th>RRULE</th></tr></thead><tbody>';
+                data.forEach(function(item) {
+                    content += `<tr>
+                        <td>${item.teacher}</td>
+                        <td>${item.subject}</td>
+                        <td>${item.class}</td>
+                        <td>${item.day}</td>
+                        <td><code>${item.rrule}</code></td>
+                    </tr>`;
+                });
+                content += '</tbody></table></div>';
+                document.getElementById('rruleContent').innerHTML = content;
+                new bootstrap.Modal(document.getElementById('rruleModal')).show();
+            })
+            .catch(error => {
+                alert('Error generating RRULE: ' + error);
+            });
+    });
+});
+</script>
+{% endblock %}

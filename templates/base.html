@@ -1,0 +1,64 @@
+<!-- templates/base.html -->
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{% block title %}Teacher Timetable Manager{% endblock %}</title>
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/bootstrap/5.3.0/css/bootstrap.min.css" rel="stylesheet">
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet">
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/fullcalendar/6.1.8/index.min.css" rel="stylesheet">
+    <style>
+        .navbar-brand { font-weight: bold; }
+        .card { box-shadow: 0 2px 4px rgba(0,0,0,0.1); }
+        .table-responsive { max-height: 600px; overflow-y: auto; }
+        .clash-alert { background-color: #fff3cd; border-color: #ffeaa7; }
+        .filter-container { background-color: #f8f9fa; padding: 20px; border-radius: 8px; margin-bottom: 20px; }
+        #calendar { margin-top: 20px; }
+        .fc-event { cursor: pointer; }
+        .teacher-badge { display: inline-block; padding: 4px 8px; border-radius: 12px; font-size: 0.8em; color: white; margin-right: 5px; }
+    </style>
+</head>
+<body>
+    <nav class="navbar navbar-expand-lg navbar-dark bg-primary">
+        <div class="container">
+            <a class="navbar-brand" href="{{ url_for('index') }}">
+                <i class="fas fa-calendar-alt"></i> Timetable Manager
+            </a>
+            <div class="navbar-nav ms-auto">
+                <a class="nav-link" href="{{ url_for('index') }}">
+                    <i class="fas fa-home"></i> Home
+                </a>
+                <a class="nav-link" href="{{ url_for('upload_files') }}">
+                    <i class="fas fa-upload"></i> Upload
+                </a>
+                <a class="nav-link" href="{{ url_for('view_timetable') }}">
+                    <i class="fas fa-table"></i> Timetable
+                </a>
+                <a class="nav-link" href="{{ url_for('calendar_view') }}">
+                    <i class="fas fa-calendar"></i> Calendar
+                </a>
+            </div>
+        </div>
+    </nav>
+
+    <div class="container mt-4">
+        {% with messages = get_flashed_messages(with_categories=true) %}
+            {% if messages %}
+                {% for category, message in messages %}
+                    <div class="alert alert-{{ 'danger' if category == 'error' else 'warning' if category == 'warning' else 'success' }} alert-dismissible fade show">
+                        {{ message }}
+                        <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+                    </div>
+                {% endfor %}
+            {% endif %}
+        {% endwith %}
+
+        {% block content %}{% endblock %}
+    </div>
+
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/bootstrap/5.3.0/js/bootstrap.bundle.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/fullcalendar/6.1.8/index.global.min.js"></script>
+    {% block scripts %}{% endblock %}
+</body>
+</html>

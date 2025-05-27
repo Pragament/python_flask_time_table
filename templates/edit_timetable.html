@@ -1,0 +1,83 @@
+<!-- templates/edit_timetable.html -->
+{% extends "base.html" %}
+
+{% block title %}Edit Timetable Entry{% endblock %}
+
+{% block content %}
+<div class="row">
+    <div class="col-md-8 mx-auto">
+        <div class="card">
+            <div class="card-header">
+                <h5><i class="fas fa-edit"></i> Edit Timetable Entry</h5>
+            </div>
+            <div class="card-body">
+                <form method="POST">
+                    <input type="hidden" name="entry_id" value="{{ entry_id }}">
+                    
+                    <div class="row">
+                        <div class="col-md-6">
+                            <div class="mb-3">
+                                <label for="teacher_name" class="form-label">Teacher Name</label>
+                                <input type="text" class="form-control" id="teacher_name" name="teacher_name" 
+                                       value="{{ entry['Teacher Name'] }}" required>
+                            </div>
+                        </div>
+                        <div class="col-md-6">
+                            <div class="mb-3">
+                                <label for="subject" class="form-label">Subject</label>
+                                <input type="text" class="form-control" id="subject" name="subject" 
+                                       value="{{ entry['Subject'] }}" required>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="row">
+                        <div class="col-md-4">
+                            <div class="mb-3">
+                                <label for="day" class="form-label">Day</label>
+                                <select class="form-select" id="day" name="day" required>
+                                    <option value="Mon" {% if entry['Day'] == 'Mon' %}selected{% endif %}>Monday</option>
+                                    <option value="Tue" {% if entry['Day'] == 'Tue' %}selected{% endif %}>Tuesday</option>
+                                    <option value="Wed" {% if entry['Day'] == 'Wed' %}selected{% endif %}>Wednesday</option>
+                                    <option value="Thurs" {% if entry['Day'] == 'Thurs' %}selected{% endif %}>Thursday</option>
+                                    <option value="Fri" {% if entry['Day'] == 'Fri' %}selected{% endif %}>Friday</option>
+                                    <option value="Sat" {% if entry['Day'] == 'Sat' %}selected{% endif %}>Saturday</option>
+                                </select>
+                            </div>
+                        </div>
+                        <div class="col-md-4">
+                            <div class="mb-3">
+                                <label for="period" class="form-label">Period</label>
+                                <input type="number" class="form-control" id="period" name="period" 
+                                       value="{{ entry['Period'] }}" min="1" max="12" required>
+                            </div>
+                        </div>
+                        <div class="col-md-4">
+                            <div class="mb-3">
+                                <label for="time_slot" class="form-label">Time Slot</label>
+                                <input type="text" class="form-control" id="time_slot" name="time_slot" 
+                                       value="{{ entry['Time Slot'] }}" placeholder="9:30 to 10:10" required>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="mb-3">
+                        <label for="class_activity" class="form-label">Class/Activity</label>
+                        <input type="text" class="form-control" id="class_activity" name="class_activity" 
+                               value="{{ entry['Class/Activity'] }}" required>
+                    </div>
+                    
+                    <div class="d-grid gap-2 d-md-flex justify-content-md-end">
+                        <a href="{{ url_for('view_timetable') }}" class="btn btn-secondary me-md-2">
+                            <i class="fas fa-arrow-left"></i> Cancel
+                        </a>
+                        <button type="submit" class="btn btn-primary">
+                            <i class="fas fa-save"></i> Save Changes
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

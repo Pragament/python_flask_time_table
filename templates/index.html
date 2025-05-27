@@ -1,0 +1,60 @@
+<!-- templates/index.html -->
+{% extends "base.html" %}
+
+{% block content %}
+<div class="row">
+    <div class="col-md-12">
+        <div class="jumbotron bg-light p-5 rounded">
+            <h1 class="display-4">Teacher Timetable Manager</h1>
+            <p class="lead">Manage teacher schedules, detect conflicts, and view timetables in calendar format.</p>
+            <hr class="my-4">
+            <div class="row">
+                <div class="col-md-3">
+                    <div class="card text-center">
+                        <div class="card-body">
+                            <i class="fas fa-users fa-3x text-primary mb-3"></i>
+                            <h5 class="card-title">{{ teachers_count }}</h5>
+                            <p class="card-text">Teachers Loaded</p>
+                        </div>
+                    </div>
+                </div>
+                <div class="col-md-3">
+                    <div class="card text-center">
+                        <div class="card-body">
+                            <i class="fas fa-clock fa-3x text-success mb-3"></i>
+                            <h5 class="card-title">{{ timetable_count }}</h5>
+                            <p class="card-text">Schedule Entries</p>
+                        </div>
+                    </div>
+                </div>
+                <div class="col-md-3">
+                    <div class="card text-center">
+                        <div class="card-body">
+                            <i class="fas fa-upload fa-3x text-info mb-3"></i>
+                            <h5 class="card-title">CSV Import</h5>
+                            <p class="card-text">Upload Data</p>
+                        </div>
+                    </div>
+                </div>
+                <div class="col-md-3">
+                    <div class="card text-center">
+                        <div class="card-body">
+                            <i class="fas fa-calendar fa-3x text-warning mb-3"></i>
+                            <h5 class="card-title">Calendar View</h5>
+                            <p class="card-text">Visual Schedule</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="mt-4">
+                <a class="btn btn-primary btn-lg" href="{{ url_for('upload_files') }}" role="button">
+                    <i class="fas fa-upload"></i> Upload CSV Files
+                </a>
+                <a class="btn btn-success btn-lg ms-2" href="{{ url_for('calendar_view') }}" role="button">
+                    <i class="fas fa-calendar"></i> View Calendar
+                </a>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

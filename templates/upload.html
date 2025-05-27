@@ -1,0 +1,53 @@
+<!-- templates/upload.html -->
+{% extends "base.html" %}
+
+{% block title %}Upload CSV Files{% endblock %}
+
+{% block content %}
+<div class="row">
+    <div class="col-md-6">
+        <div class="card">
+            <div class="card-header">
+                <h5><i class="fas fa-users"></i> Upload Teachers List</h5>
+            </div>
+            <div class="card-body">
+                <form method="POST" enctype="multipart/form-data">
+                    <div class="mb-3">
+                        <label for="teachers_file" class="form-label">Teachers CSV File</label>
+                        <input type="file" class="form-control" id="teachers_file" name="teachers_file" accept=".csv" required>
+                        <div class="form-text">Expected format: S.NO, NAME OF THE TEACHER</div>
+                    </div>
+                    <button type="submit" class="btn btn-primary">
+                        <i class="fas fa-upload"></i> Upload Teachers
+                    </button>
+                </form>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-6">
+        <div class="card">
+            <div class="card-header">
+                <h5><i class="fas fa-clock"></i> Upload Timetable</h5>
+            </div>
+            <div class="card-body">
+                <form method="POST" enctype="multipart/form-data">
+                    <div class="mb-3">
+                        <label for="timetable_file" class="form-label">Timetable CSV File</label>
+                        <input type="file" class="form-control" id="timetable_file" name="timetable_file" accept=".csv" required>
+                        <div class="form-text">Expected format: Teacher Name, Subject, Day, Period, Time Slot, Class/Activity</div>
+                    </div>
+                    <button type="submit" class="btn btn-success">
+                        <i class="fas fa-upload"></i> Upload Timetable
+                    </button>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="row mt-4">
+    <div class="col-md-12">
+        <!-- File Format Requirements card and CSV format examples removed for confidentiality -->
+    </div>
+</div>
+{% endblock %}
