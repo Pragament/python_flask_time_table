@@ -7,6 +7,7 @@ from datetime import datetime, timedelta
 import re
 from dateutil.rrule import rrule, WEEKLY, DAILY, MO, TU, WE, TH, FR, SA, SU
 from dateutil.parser import parse as date_parse
+from flask_sqlalchemy import SQLAlchemy
 
 app = Flask(__name__)
 app.secret_key = 'your-secret-key-here-change-in-production'
@@ -16,6 +17,8 @@ UPLOAD_FOLDER = 'uploads'
 ALLOWED_EXTENSIONS = {'csv'}
 app.config['UPLOAD_FOLDER'] = UPLOAD_FOLDER
 app.config['MAX_CONTENT_LENGTH'] = 16 * 1024 * 1024  # 16MB max file size
+app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///timetable.db'
+app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 
 # Ensure upload folder exists
 if not os.path.exists(UPLOAD_FOLDER):
@@ -35,6 +38,26 @@ DAY_MAPPING = {
     'saturday': SA, 'sat': SA,
     'sunday': SU, 'sun': SU
 }
+
+db = SQLAlchemy(app)
+
+class TimetableEntry(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    teacher_name = db.Column(db.String(100), nullable=False)
+    subject = db.Column(db.String(100), nullable=False)
+    day = db.Column(db.String(20), nullable=False)
+    period = db.Column(db.String(20), nullable=False)
+    time_slot = db.Column(db.String(50), nullable=False)
+    class_activity = db.Column(db.String(100), nullable=False)
+
+class Substitution(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    date = db.Column(db.String(20), nullable=False)
+    period = db.Column(db.String(20), nullable=False)
+    class_activity = db.Column(db.String(100), nullable=False)
+    original_teacher = db.Column(db.String(100), nullable=False)
+    substitute_teacher = db.Column(db.String(100), nullable=False)
+    subject = db.Column(db.String(100), nullable=False)
 
 def allowed_file(filename):
     return '.' in filename and filename.rsplit('.', 1)[1].lower() in ALLOWED_EXTENSIONS
@@ -240,13 +263,28 @@ def view_timetable():
     
     # Detect clashes
     clashes = detect_clashes(df)
-    
+
+    # Compute teacher stats for dropdown
+    from collections import Counter
+    teacher_stats = {t: {'absent': 0, 'substitute': 0} for t in teachers}
+    try:
+        
+        from python_flask_time_table.app import db
+        all_subs = Substitution.query.all()
+        for t in teachers:
+            teacher_stats[t]['absent'] = sum(1 for s in all_subs if s.original_teacher == t)
+            teacher_stats[t]['substitute'] = sum(1 for s in all_subs if s.substitute_teacher == t)
+    except Exception:
+        # fallback if db not available
+        pass
+
     return render_template('timetable.html', 
                          timetable=timetable_data,
                          teachers=teachers,
                          subjects=subjects,
                          classes=classes,
-                         clashes=clashes)
+                         clashes=clashes,
+                         teacher_stats=teacher_stats)
 
 @app.route('/calendar')
 def calendar_view():
@@ -259,11 +297,50 @@ def calendar_view():
     teachers = sorted([t for t in df['Teacher Name'].dropna().unique() if isinstance(t, str)])
     subjects = sorted([s for s in df['Subject'].dropna().unique() if isinstance(s, str)])
     classes = sorted([c for c in df['Class/Activity'].dropna().unique() if isinstance(c, str)])
+    periods = sorted([p for p in df['Period'].dropna().unique() if str(p).isdigit()])
     
     return render_template('calendar.html',
                          teachers=teachers,
                          subjects=subjects,
-                         classes=classes)
+                         classes=classes,
+                         periods=periods)
+
+@app.route('/substitute_handling')
+def substitute_handling_view():
+    print('substitute_handling_view called', flush=True)
+    if not timetable_data:
+        flash('No timetable data available. Please upload timetable CSV first.', 'warning')
+        return redirect(url_for('upload_files'))
+    
+    df = pd.DataFrame(timetable_data)
+    teachers = sorted([t for t in df['Teacher Name'].dropna().unique() if isinstance(t, str)])
+    subjects = sorted([s for s in df['Subject'].dropna().unique() if isinstance(s, str)])
+    classes = sorted([c for c in df['Class/Activity'].dropna().unique() if isinstance(c, str)])
+    periods = sorted([p for p in df['Period'].dropna().unique() if str(p).isdigit()])
+
+    # Compute teacher stats for dropdown
+    teacher_stats = {t: {'absent': 0, 'substitute': 0} for t in teachers}
+    try:
+        
+        all_subs = Substitution.query.all()
+        print('Saved substitutions:', [(s.original_teacher, s.substitute_teacher, s.subject) for s in all_subs], flush=True)
+        # Build a mapping of cleaned teacher names to original names
+        teacher_clean_map = {t.strip().lower(): t for t in teachers}
+        for t in teachers:
+            t_clean = t.strip().lower()
+            teacher_stats[t]['absent'] = sum(1 for s in all_subs if s.original_teacher and s.original_teacher.strip().lower() == t_clean)
+            teacher_stats[t]['substitute'] = sum(1 for s in all_subs if s.substitute_teacher and s.substitute_teacher.strip().lower() == t_clean)
+        print('Computed teacher_stats:', teacher_stats, flush=True)
+    except Exception as e:
+        print('Error calculating teacher stats:', e, flush=True)
+        pass
+
+    return render_template('substitute_handling.html',
+                         teachers=teachers,
+                         subjects=subjects,
+                         classes=classes,
+                         periods=periods,
+                         teacher_stats=teacher_stats)
 
 @app.route('/api/events')
 def get_events():
@@ -387,6 +464,167 @@ def generate_rrule():
             rrule_data.append(rrule_entry)
     
     return jsonify(rrule_data)
+
+@app.route('/api/free_teachers')
+def get_free_teachers():
+    date_str = request.args.get('date')
+    period = request.args.get('period')
+    subject_param = request.args.get('subject', None)
+    class_param = request.args.get('class', None)
+
+    if not timetable_data:
+        return jsonify({'error': 'No timetable data available. Please upload timetable CSV first.'}), 400
+
+    if not date_str or not period:
+        return jsonify({'error': 'Missing date or period'}), 400
+
+    try:
+        selected_date = datetime.strptime(date_str, "%Y-%m-%d")
+        weekday_short = selected_date.strftime("%a").capitalize()  # e.g., 'Tue'
+
+        # Normalize subject filter
+        if subject_param:
+            selected_subjects = [s.strip() for s in subject_param.split(',') if s.strip()]
+            selected_subjects_normalized = set(s.strip().lower() for s in selected_subjects)
+        else:
+            selected_subjects_normalized = set()
+
+        # Normalize class filter
+        if class_param:
+            selected_classes = [c.strip() for c in class_param.split(',') if c.strip()]
+            selected_classes_normalized = set(c.strip().lower() for c in selected_classes)
+        else:
+            selected_classes_normalized = set()
+
+        # 1. Teachers who teach selected subject(s) (allow partial match)
+        if selected_subjects_normalized:
+            subject_teachers = set(
+                t['Teacher Name'] for t in timetable_data
+                if isinstance(t.get('Teacher Name'), str)
+                and t.get('Teacher Name').strip()
+                and any(
+                    subj in str(t.get('Subject', '')).strip().lower()
+                    for subj in selected_subjects_normalized
+                )
+            )
+        else:
+            subject_teachers = set(
+                t['Teacher Name'] for t in timetable_data
+                if isinstance(t.get('Teacher Name'), str) and t.get('Teacher Name').strip()
+            )
+
+        # 2. Teachers who teach selected class(es)
+        if selected_classes_normalized:
+            class_teachers = set(
+                t['Teacher Name'] for t in timetable_data
+                if isinstance(t.get('Teacher Name'), str)
+                and t.get('Teacher Name').strip()
+                and str(t.get('Class/Activity', '')).strip().lower() in selected_classes_normalized
+            )
+        else:
+            class_teachers = set(
+                t['Teacher Name'] for t in timetable_data
+                if isinstance(t.get('Teacher Name'), str) and t.get('Teacher Name').strip()
+            )
+
+        # Combine filters: Teachers who match both subject and class
+        filtered_teachers = subject_teachers & class_teachers
+
+        # 3. Busy teachers on selected day and period
+        busy_teachers = set(
+            t['Teacher Name'] for t in timetable_data
+            if isinstance(t.get('Teacher Name'), str)
+            and t.get('Teacher Name').strip()
+            and str(t.get('Day', '')).strip() == weekday_short
+            and str(t.get('Period', '')).strip() == period
+        )
+
+        # 4. Final: Free teachers who match subject and class filters
+        free_teachers = sorted(list(filtered_teachers - busy_teachers))
+
+        free_teacher_subjects = []
+        for teacher in sorted(filtered_teachers - busy_teachers):
+            # Find all matching subjects this teacher teaches (from selected_subjects, partial match)
+            matching_subjects = set(
+                str(t.get('Subject', '')).strip()
+                for t in timetable_data
+                if t.get('Teacher Name') == teacher
+                and (
+                    not selected_subjects_normalized or
+                    any(subj in str(t.get('Subject', '')).strip().lower() for subj in selected_subjects_normalized)
+                )
+            )
+            for subj in matching_subjects:
+                free_teacher_subjects.append({'name': teacher, 'subject': subj})
+        print("Selected subjects:", selected_subjects_normalized)
+        print("Filtered teachers (teach selected subjects):", filtered_teachers)
+        print("Busy teachers:", busy_teachers)
+        print("Free teachers:", filtered_teachers - busy_teachers)
+        print("Free teacher-subjects:", free_teacher_subjects)
+        return jsonify({'free_teachers': free_teacher_subjects})
+
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+    
+    
+    
+@app.route('/api/teacher_periods')
+def get_teacher_periods():
+    teacher = request.args.get('teacher')
+    date_str = request.args.get('date')
+    if not teacher or not date_str:
+        return jsonify({'periods': []})
+
+    try:
+        selected_date = datetime.strptime(date_str, "%Y-%m-%d")
+        weekday_short = selected_date.strftime("%a").capitalize()  # e.g., 'Mon'
+
+        periods = sorted(set(
+            str(row['Period']).strip()
+            for row in timetable_data
+            if str(row.get('Day', '')).strip() == weekday_short
+            and row.get('Teacher Name') == teacher
+            and row.get('Period') is not None
+        ), key=lambda x: int(x) if x.isdigit() else x)
+
+        return jsonify({'periods': periods})
+    except Exception as e:
+        return jsonify({'periods': [], 'error': str(e)})
+
+@app.route('/api/substitutions', methods=['POST'])
+def save_substitution():
+    data = request.get_json()
+    required_fields = ['date', 'period', 'class_activity', 'original_teacher', 'substitute_teacher', 'subject']
+    if not all(field in data for field in required_fields):
+        return jsonify({'error': 'Missing required fields'}), 400
+    substitution = Substitution(
+        date=data['date'],
+        period=data['period'],
+        class_activity=data['class_activity'],
+        original_teacher=data['original_teacher'],
+        substitute_teacher=data['substitute_teacher'],
+        subject=data['subject']
+    )
+    db.session.add(substitution)
+    db.session.commit()
+    return jsonify({'message': 'Substitution saved successfully'}), 201
+
+@app.route('/api/substitutions', methods=['GET'])
+def get_substitutions():
+    substitutions = Substitution.query.all()
+    result = [
+        {
+            'id': s.id,
+            'date': s.date,
+            'period': s.period,
+            'class_activity': s.class_activity,
+            'original_teacher': s.original_teacher,
+            'substitute_teacher': s.substitute_teacher,
+            'subject': s.subject
+        }
+        for s in substitutions
+    ]
+    return jsonify(result)
 
 if __name__ == '__main__':
     app.run(debug=True, port=5000)
