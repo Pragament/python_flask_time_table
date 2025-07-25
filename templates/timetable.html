@@ -36,7 +36,9 @@
             <select id="teacherSelect" class="form-select">
                 <option value="">All Teachers</option>
                 {% for teacher in teachers %}
-                    <option value="{{ teacher }}">{{ teacher }}</option>
+                    <option value="{{ teacher }}">
+                        {{ teacher }} (Absent: {{ teacher_stats[teacher]['absent'] }}, Substituted: {{ teacher_stats[teacher]['substitute'] }})
+                    </option>
                 {% endfor %}
             </select>
         </div>

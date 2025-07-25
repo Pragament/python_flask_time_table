@@ -1,0 +1,511 @@
+<!-- templates/calendar.html -->
+{% extends "base.html" %}
+
+{% block title %}Calendar View{% endblock %}
+
+{% block content %}
+<div class="filter-container">
+    <h5><i class="fas fa-filter"></i> Filters</h5>
+    <div class="row g-3 align-items-end">
+        <div class="col-md-3">
+            <label for="teacherFilter" class="form-label">Teacher</label>
+            <select id="teacherFilter" class="form-select">
+                <option value="">All Teachers</option>
+                {% for teacher in teachers %}
+                    <option value="{{ teacher }}">{{ teacher }}</option>
+                {% endfor %}
+            </select>
+        </div>
+        <div class="col-md-3">
+            <label for="filterPeriodNumber" class="form-label">Period Numbers</label>
+            <div id="teacherPeriodsCheckboxes" class="row gx-2 gy-2">
+                <!-- Checkboxes will be inserted here -->
+            </div>
+        </div>
+        
+        
+        
+    </div>
+    <div class="row mt-3">
+        <div class="col-md-12">
+            <button id="applyFilters" class="btn btn-primary">
+                <i class="fas fa-search"></i> Apply Filters
+            </button>
+            <button id="clearFilters" class="btn btn-secondary ms-2">
+                <i class="fas fa-times"></i> Clear Filters
+            </button>
+            <button id="generateRRule" class="btn btn-info ms-2">
+                <i class="fas fa-code"></i> Generate RRULE
+            </button>
+        </div>
+    </div>
+</div>
+
+<div class="filter-container">
+    <!-- Substitution Handling Section -->
+    <div class="row mt-4">
+        
+            <h5><i class="fas fa-exchange-alt"></i> Substitution Handling</h5>
+            
+            
+        
+        <div class="col-md-4 d-flex align-items-end">
+            <div class="w-100">
+                <label for="substitutionDate" class="form-label">Select Date</label>
+                <input type="date" id="substitutionDate" class="form-control">
+            </div>
+        </div>
+        
+
+        <div class="col-md-4">
+            <label for="subjectFilter" class="form-label">Subject</label>
+            <select id="subjectFilter" class="form-select" multiple>
+                {% for subject in subjects %}
+                    <option value="{{ subject }}">{{ subject }}</option>
+                {% endfor %}
+            </select>
+            <small class="form-text text-muted">Hold Ctrl (Windows) or Cmd (Mac) to select multiple subjects.</small>
+        </div>
+        <div class="col-md-4">
+            <label for="classFilter" class="form-label">Class</label>
+            <select id="classFilter" class="form-select" multiple>
+                {% for class in classes %}
+                    <option value="{{ class }}">{{ class }}</option>
+                {% endfor %}
+            </select>
+            <small class="form-text text-muted">Hold Ctrl (Windows) or Cmd (Mac) to select multiple classes.</small>
+        </div>
+
+
+
+        <div class="col-md-12 d-flex justify-content-end align-items-end mt-2">
+            <button id="showSubstituteResults" class="btn btn-primary">Show Results</button>
+
+
+            
+        </div>
+    </div>
+</div>
+
+<div class="mt-4" id="substituteAssignedSection">
+    <h5>Substitute Assigned</h5>
+    <div class="d-flex justify-content-end mb-2">
+        
+            <strong>Legend:</strong>
+            <table class="table table-borderless table-sm mb-0" style="width:auto;">
+                <tr>
+                    <td class="p-0 pe-2" style="vertical-align: middle;"><span class="badge bg-secondary">Absent</span></td>
+                    <td class="p-0" style="vertical-align: middle;">= A.</td>
+                </tr>
+                <tr>
+                    <td class="p-0 pe-2" style="vertical-align: middle;"><span class="badge bg-info text-dark">Substituted</span></td>
+                    <td class="p-0" style="vertical-align: middle;">= S.</td>
+                </tr>
+            </table>
+        
+    </div>
+    <div id="freeTeachersCheckboxes">
+        <!-- Free teacher checkboxes will appear here -->
+    </div>
+    <div class="mt-3">
+        <button id="saveSubstitutionBtn" class="btn btn-success">Save Substitution</button>
+        <span id="substitutionStatus" class="ms-2"></span>
+    </div>
+</div>
+
+<div class="mt-4">
+    <button id="showSavedSubsBtn" class="btn btn-info">Show Saved Substitutions</button>
+</div>
+<div class="mt-3 table-responsive" id="savedSubsTableContainer" style="display:none;">
+    <table class="table table-bordered table-striped" id="savedSubsTable">
+        <thead>
+            <tr>
+                <th>Date</th>
+                <th>Period</th>
+                <th>Class</th>
+                <th>Original Teacher</th>
+                <th>Substitute Teacher</th>
+                <th>Subject</th>
+            </tr>
+        </thead>
+        <tbody></tbody>
+    </table>
+</div>
+
+
+<div id="calendar" class="mt-4"></div>
+
+<!-- RRULE Modal -->
+<div class="modal fade" id="rruleModal" tabindex="-1">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">Generated RRULE Strings</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <div id="rruleContent"></div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Event Detail Modal -->
+<div class="modal fade" id="eventModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">Event Details</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <div id="eventContent"></div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+// Inject teacher stats from Flask
+window.teacherStats = {{ teacher_stats | tojson }};
+document.addEventListener('DOMContentLoaded', function() {
+    var calendarEl = document.getElementById('calendar');
+    var calendar = new FullCalendar.Calendar(calendarEl, {
+        initialView: 'timeGridWeek',
+        headerToolbar: {
+            left: 'prev,next today',
+            center: 'title',
+            right: 'dayGridMonth,timeGridWeek,timeGridDay'
+        },
+        slotMinTime: '09:00:00',
+        slotMaxTime: '17:00:00',
+        height: 'auto',
+        events: function(fetchInfo, successCallback, failureCallback) {
+            loadEvents(fetchInfo, successCallback, failureCallback);
+        },
+        eventClick: function(info) {
+            showEventDetails(info.event);
+        }
+    });
+
+    calendar.render();
+
+    function loadEvents(fetchInfo, successCallback, failureCallback) {
+        var teacherFilter = document.getElementById('teacherFilter').value;
+        var subjectFilter = document.getElementById('subjectFilter').value;
+        var classFilter = document.getElementById('classFilter').value;
+
+        var params = new URLSearchParams({
+            start: fetchInfo.startStr,
+            end: fetchInfo.endStr
+        });
+
+        if (teacherFilter) params.append('teacher', teacherFilter);
+        if (subjectFilter) params.append('subject', subjectFilter);
+        if (classFilter) params.append('class', classFilter);
+
+        fetch('/api/events?' + params.toString())
+            .then(response => response.json())
+            .then(data => successCallback(data))
+            .catch(error => failureCallback(error));
+    }
+
+    function showEventDetails(event) {
+        var content = `
+            <div class="row">
+                <div class="col-12">
+                    <h6><strong>Teacher:</strong> ${event.extendedProps.teacher}</h6>
+                    <h6><strong>Subject:</strong> ${event.extendedProps.subject}</h6>
+                    <h6><strong>Class:</strong> ${event.extendedProps.class}</h6>
+                    <h6><strong>Period:</strong> ${event.extendedProps.period}</h6>
+                    <h6><strong>Time:</strong> ${event.extendedProps.timeSlot || 'N/A'}</h6>
+                    <h6><strong>Day:</strong> ${event.start.toLocaleDateString('en-US', { weekday: 'long' })}</h6>
+                </div>
+            </div>
+        `;
+        document.getElementById('eventContent').innerHTML = content;
+        new bootstrap.Modal(document.getElementById('eventModal')).show();
+    }
+
+    document.getElementById('applyFilters').addEventListener('click', function() {
+        calendar.refetchEvents();
+    });
+
+    document.getElementById('clearFilters').addEventListener('click', function() {
+        document.getElementById('teacherFilter').value = '';
+        document.getElementById('subjectFilter').value = '';
+        document.getElementById('classFilter').value = '';
+        calendar.refetchEvents();
+    });
+
+    document.getElementById('generateRRule').addEventListener('click', function() {
+        fetch('/generate_rrule')
+            .then(response => response.json())
+            .then(data => {
+                var content = '<div class="table-responsive"><table class="table table-striped"><thead><tr><th>Teacher</th><th>Subject</th><th>Class</th><th>Day</th><th>RRULE</th></tr></thead><tbody>';
+                data.forEach(function(item) {
+                    content += `<tr>
+                        <td>${item.teacher}</td>
+                        <td>${item.subject}</td>
+                        <td>${item.class}</td>
+                        <td>${item.day}</td>
+                        <td><code>${item.rrule}</code></td>
+                    </tr>`;
+                });
+                content += '</tbody></table></div>';
+                document.getElementById('rruleContent').innerHTML = content;
+                new bootstrap.Modal(document.getElementById('rruleModal')).show();
+            })
+            .catch(error => {
+                alert('Error generating RRULE: ' + error);
+            });
+    });
+
+    // 🔍 Substitution handling logic
+    document.getElementById('showSubstituteResults').addEventListener('click', checkFreeTeachers);
+
+    function checkFreeTeachers() {
+        const date = document.getElementById('substitutionDate').value;
+        const checkedPeriods = Array.from(document.querySelectorAll('#teacherPeriodsCheckboxes input[type="checkbox"]:checked'))
+            .map(cb => cb.value);
+
+        const subjectSelect = document.getElementById('subjectFilter');
+        const selectedSubjects = Array.from(subjectSelect.selectedOptions).map(opt => opt.value);
+
+        const classSelect = document.getElementById('classFilter');
+        const selectedClasses = Array.from(classSelect.selectedOptions).map(opt => opt.value);
+
+        if (!date || checkedPeriods.length === 0) {
+            alert('Please select a date and at least one period.');
+            return;
+        }
+
+        const freeTeachersContainer = document.getElementById('freeTeachersCheckboxes');
+        freeTeachersContainer.innerHTML = ''; // Clear previous results
+
+        let fetches = checkedPeriods.map(period => {
+            const subjectParam = selectedSubjects.length > 0 ? `&subject=${encodeURIComponent(selectedSubjects.join(','))}` : '';
+            const classParam = selectedClasses.length > 0 ? `&class=${encodeURIComponent(selectedClasses.join(','))}` : '';
+
+            return fetch(`/api/free_teachers?date=${date}&period=${period}${subjectParam}${classParam}`)
+                .then(response => response.json())
+                .then(data => {
+                    // Add period header
+                    const periodHeader = document.createElement('div');
+                    periodHeader.className = 'mt-3 fw-bold';
+                    periodHeader.innerHTML = `Period ${period}:`;
+                    freeTeachersContainer.appendChild(periodHeader);
+
+                    if (data.free_teachers && data.free_teachers.length > 0) {
+                        data.free_teachers.forEach((teacherObj, index) => {
+                            const teacherName = teacherObj.name;
+                            const subject = teacherObj.subject;
+
+                            const wrapperDiv = document.createElement('div');
+                            wrapperDiv.className = 'form-check form-check-inline mb-2';
+
+                            const checkbox = document.createElement('input');
+                            checkbox.type = 'checkbox';
+                            checkbox.value = `${teacherName} - ${subject}`;
+                            checkbox.id = `substitute_${period}_${teacherName.replace(/\s+/g, '_')}_${subject.replace(/\s+/g, '_')}`;
+                            checkbox.name = `substitute_teachers_${period}`;
+                            checkbox.className = 'form-check-input';
+
+                            const label = document.createElement('label');
+                            label.htmlFor = checkbox.id;
+                            label.className = 'form-check-label';
+                            label.innerHTML = `${teacherName} <span class='badge bg-secondary ms-1'>A: ${(window.teacherStats[teacherName]?.absent ?? 0)}</span> <span class='badge bg-info text-dark ms-1'>S: ${(window.teacherStats[teacherName]?.substitute ?? 0)}</span> - ${subject}`;
+
+                            wrapperDiv.appendChild(checkbox);
+                            wrapperDiv.appendChild(label);
+                            freeTeachersContainer.appendChild(wrapperDiv);
+                        });
+                    } else {
+                        const noTeachers = document.createElement('div');
+                        noTeachers.className = 'text-muted';
+                        noTeachers.innerHTML = `No free teachers for period ${period}.`;
+                        freeTeachersContainer.appendChild(noTeachers);
+                    }
+                });
+        });
+
+        Promise.all(fetches).catch(err => {
+            console.error("Error fetching free teachers:", err);
+            alert("Something went wrong while fetching free teachers.");
+        });
+    }
+    
+    
+
+    function updateTeacherPeriodsCheckboxes() {
+        const teacher = document.getElementById('teacherFilter').value;
+        const date = document.getElementById('substitutionDate').value;
+        const container = document.getElementById('teacherPeriodsCheckboxes');
+        container.innerHTML = '';
+        container.className = 'row'; // Bootstrap row for columns
+    
+        if (!teacher || !date) {
+            return;
+        }
+    
+        fetch(`/api/teacher_periods?teacher=${encodeURIComponent(teacher)}&date=${encodeURIComponent(date)}`)
+            .then(response => response.json())
+            .then(data => {
+                if (data.periods && data.periods.length > 0) {
+                    // Split periods into two columns
+                    const col1 = document.createElement('div');
+                    col1.className = 'col-6';
+                    const col2 = document.createElement('div');
+                    col2.className = 'col-6';
+
+                    data.periods.forEach((period, idx) => {
+                        const div = document.createElement('div');
+                        div.className = 'form-check mb-2';
+
+                        const checkbox = document.createElement('input');
+                        checkbox.className = 'form-check-input';
+                        checkbox.type = 'checkbox';
+                        checkbox.value = period;
+                        checkbox.id = `period_${period}`;
+                        checkbox.name = 'teacher_periods';
+
+                        const label = document.createElement('label');
+                        label.className = 'form-check-label badge bg-secondary text-white px-3 py-2 rounded-pill';
+                        label.htmlFor = `period_${period}`;
+                        label.textContent = `Period ${period}`;
+
+                        div.appendChild(checkbox);
+                        div.appendChild(label);
+
+                        // Alternate between columns
+                        if (idx % 2 === 0) {
+                            col1.appendChild(div);
+                        } else {
+                            col2.appendChild(div);
+                        }
+                    });
+
+                    container.appendChild(col1);
+                    container.appendChild(col2);
+                } else {
+                    container.innerHTML = '<span class="text-muted">No periods for this teacher on this date.</span>';
+                }
+            });
+    }
+    
+
+    document.getElementById('teacherFilter').addEventListener('change', function() {
+        // Set date to today if not set
+        const dateInput = document.getElementById('substitutionDate');
+        if (!dateInput.value) {
+            const today = new Date();
+            const yyyy = today.getFullYear();
+            const mm = String(today.getMonth() + 1).padStart(2, '0');
+            const dd = String(today.getDate()).padStart(2, '0');
+            dateInput.value = `${yyyy}-${mm}-${dd}`;
+        }
+        updateTeacherPeriodsCheckboxes();
+    });
+    document.getElementById('substitutionDate').addEventListener('change', updateTeacherPeriodsCheckboxes);
+
+    const dateInput = document.getElementById('substitutionDate');
+    if (!dateInput.value) {
+        const today = new Date();
+        const yyyy = today.getFullYear();
+        const mm = String(today.getMonth() + 1).padStart(2, '0');
+        const dd = String(today.getDate()).padStart(2, '0');
+        dateInput.value = `${yyyy}-${mm}-${dd}`;
+    }
+    if (document.getElementById('teacherFilter').value) {
+        updateTeacherPeriodsCheckboxes();
+    }
+
+    document.getElementById('saveSubstitutionBtn').addEventListener('click', function() {
+        const date = document.getElementById('substitutionDate').value;
+        const checkedPeriods = Array.from(document.querySelectorAll('#teacherPeriodsCheckboxes input[type="checkbox"]:checked')).map(cb => cb.value);
+        const classSelect = document.getElementById('classFilter');
+        const selectedClasses = Array.from(classSelect.selectedOptions).map(opt => opt.value);
+        const subjectSelect = document.getElementById('subjectFilter');
+        const selectedSubjects = Array.from(subjectSelect.selectedOptions).map(opt => opt.value);
+
+        // Find checked substitute teacher checkboxes
+        const checkedSubs = Array.from(document.querySelectorAll('#freeTeachersCheckboxes input[type="checkbox"]:checked'));
+
+        if (!date || checkedPeriods.length === 0 || checkedSubs.length === 0) {
+            document.getElementById('substitutionStatus').textContent = 'Please select date, period, and at least one substitute.';
+            return;
+        }
+
+        // For each checked substitute, send a POST request
+        checkedSubs.forEach(cb => {
+            // Parse teacher and subject from value
+            const [substitute_teacher, subject] = cb.value.split(' - ');
+            // For demo, pick the first selected class and period (customize as needed)
+            const class_activity = selectedClasses[0] || '';
+            const period = checkedPeriods[0] || '';
+            // You may want to let the user select the original teacher, or infer it from context
+            const original_teacher = document.getElementById('teacherFilter').value;
+
+            fetch('/api/substitutions', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    date,
+                    period,
+                    class_activity,
+                    original_teacher,
+                    substitute_teacher,
+                    subject
+                })
+            })
+            .then(res => res.json())
+            .then(data => {
+                document.getElementById('substitutionStatus').textContent = data.message || data.error;
+            })
+            .catch(err => {
+                document.getElementById('substitutionStatus').textContent = 'Error saving substitution.';
+            });
+        });
+    });
+
+    document.getElementById('showSavedSubsBtn').addEventListener('click', function() {
+        fetch('/api/substitutions')
+            .then(res => res.json())
+            .then(data => {
+                const tableBody = document.querySelector('#savedSubsTable tbody');
+                tableBody.innerHTML = '';
+                if (data.length === 0) {
+                    tableBody.innerHTML = '<tr><td colspan="6" class="text-center">No saved substitutions.</td></tr>';
+                } else {
+                    data.forEach(sub => {
+                        const row = document.createElement('tr');
+                        row.innerHTML = `
+                            <td>${sub.date}</td>
+                            <td>${sub.period}</td>
+                            <td>${sub.class_activity}</td>
+                            <td>${sub.original_teacher}</td>
+                            <td>${sub.substitute_teacher}</td>
+                            <td>${sub.subject}</td>
+                        `;
+                        tableBody.appendChild(row);
+                    });
+                }
+                document.getElementById('savedSubsTableContainer').style.display = 'block';
+            })
+            .catch(() => {
+                const tableBody = document.querySelector('#savedSubsTable tbody');
+                tableBody.innerHTML = '<tr><td colspan="6" class="text-center text-danger">Error loading data.</td></tr>';
+                document.getElementById('savedSubsTableContainer').style.display = 'block';
+            });
+    });
+});
+</script>
+{% endblock %}
+
+<!-- Select2 CSS -->
+<link href="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/css/select2.min.css" rel="stylesheet" />
+<!-- Select2 JS -->
+<script src="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/js/select2.min.js"></script>
+ 

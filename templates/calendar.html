@@ -50,7 +50,45 @@
     </div>
 </div>
 
-<div id="calendar"></div>
+<div class="filter-container">
+    <!-- Substitution Handling Section -->
+    <div class="row mt-4">
+        <div class="col-md-4">
+            <h5><i class="fas fa-exchange-alt"></i> Substitution Handling</h5>
+            <label for="substitutionType" class="form-label">Substitution Type</label>
+            <select id="substitutionType" class="form-select">
+                <option value="all">All Substitutions</option>
+                {% if substitution_types %}
+                    {% for sub_type in substitution_types %}
+                        <option value="{{ sub_type }}">{{ sub_type }}</option>
+                    {% endfor %}
+                {% endif %}
+            </select>
+        </div>
+        <div class="col-md-4 d-flex align-items-end">
+            <div class="w-100">
+                <label for="substitutionDate" class="form-label">Select Date</label>
+                <input type="date" id="substitutionDate" class="form-control">
+            </div>
+        </div>
+        <div class="col-md-4 d-flex align-items-end">
+            <div class="w-100">
+                <label for="PeriodNumber" class="form-label">Period Number</label>
+                <select id="PeriodNumber" class="form-select">
+                    <option value="all">All Periods</option>
+                    {% for period in range(1, 13) %}
+                        <option value="{{ period }}">{{ period }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+        </div>
+        <div class="col-md-12 d-flex justify-content-end align-items-end mt-2">
+            <button id="showSubstituteResults" class="btn btn-primary">Show Results</button>
+        </div>
+    </div>
+</div>
+
+<div id="calendar" class="mt-4"></div>
 
 <!-- RRULE Modal -->
 <div class="modal fade" id="rruleModal" tabindex="-1">
@@ -104,29 +142,29 @@ document.addEventListener('DOMContentLoaded', function() {
             showEventDetails(info.event);
         }
     });
-    
+
     calendar.render();
-    
+
     function loadEvents(fetchInfo, successCallback, failureCallback) {
         var teacherFilter = document.getElementById('teacherFilter').value;
         var subjectFilter = document.getElementById('subjectFilter').value;
         var classFilter = document.getElementById('classFilter').value;
-        
+
         var params = new URLSearchParams({
             start: fetchInfo.startStr,
             end: fetchInfo.endStr
         });
-        
+
         if (teacherFilter) params.append('teacher', teacherFilter);
         if (subjectFilter) params.append('subject', subjectFilter);
         if (classFilter) params.append('class', classFilter);
-        
+
         fetch('/api/events?' + params.toString())
             .then(response => response.json())
             .then(data => successCallback(data))
             .catch(error => failureCallback(error));
     }
-    
+
     function showEventDetails(event) {
         var content = `
             <div class="row">
@@ -135,7 +173,7 @@ document.addEventListener('DOMContentLoaded', function() {
                     <h6><strong>Subject:</strong> ${event.extendedProps.subject}</h6>
                     <h6><strong>Class:</strong> ${event.extendedProps.class}</h6>
                     <h6><strong>Period:</strong> ${event.extendedProps.period}</h6>
-                    <h6><strong>Time:</strong> ${event.extendedProps.timeSlot}</h6>
+                    <h6><strong>Time:</strong> ${event.extendedProps.timeSlot || 'N/A'}</h6>
                     <h6><strong>Day:</strong> ${event.start.toLocaleDateString('en-US', { weekday: 'long' })}</h6>
                 </div>
             </div>
@@ -143,20 +181,18 @@ document.addEventListener('DOMContentLoaded', function() {
         document.getElementById('eventContent').innerHTML = content;
         new bootstrap.Modal(document.getElementById('eventModal')).show();
     }
-    
-    // Filter event handlers
+
     document.getElementById('applyFilters').addEventListener('click', function() {
         calendar.refetchEvents();
     });
-    
+
     document.getElementById('clearFilters').addEventListener('click', function() {
         document.getElementById('teacherFilter').value = '';
         document.getElementById('subjectFilter').value = '';
         document.getElementById('classFilter').value = '';
         calendar.refetchEvents();
     });
-    
-    // Generate RRULE functionality
+
     document.getElementById('generateRRule').addEventListener('click', function() {
         fetch('/generate_rrule')
             .then(response => response.json())
@@ -179,6 +215,38 @@ document.addEventListener('DOMContentLoaded', function() {
                 alert('Error generating RRULE: ' + error);
             });
     });
+
+    // 🔍 Substitution handling logic
+    document.getElementById('showSubstituteResults').addEventListener('click', checkFreeTeachers);
+
+    function checkFreeTeachers() {
+        const date = document.getElementById('substitutionDate').value;
+        const period = document.getElementById('PeriodNumber').value;
+
+        if (!date || period === "all") {
+            return;
+        }
+
+        fetch(`/api/free_teachers?date=${date}&period=${period}`)
+
+            .then(response => response.json())
+            .then(data => {
+                if (data.free_teachers) {
+                    const freeList = data.free_teachers.map(t => `<li>${t}</li>`).join('');
+                    const modalHtml = `
+                        <p><strong>Free Teachers on ${date} (Period ${period}):</strong></p>
+                        <ul>${freeList || '<li>No free teachers</li>'}</ul>
+                    `;
+                    // Set modal title to "Free Teachers"
+                    document.querySelector('#eventModal .modal-title').textContent = "Free Teachers";
+                    document.getElementById('eventContent').innerHTML = modalHtml;
+                    new bootstrap.Modal(document.getElementById('eventModal')).show();
+                } else {
+                    alert(data.error || 'Failed to fetch');
+                }
+            })
+            .catch(err => alert('Error fetching free teachers: ' + err));
+    }
 });
 </script>
 {% endblock %}
